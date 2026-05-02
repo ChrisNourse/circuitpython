@@ -94,13 +94,16 @@ static inline uint32_t add16signed(uint32_t a, uint32_t b) {
 __attribute__((always_inline))
 static inline uint32_t mult16signed(uint32_t val, int32_t mul[2]) {
     #if (defined(__ARM_ARCH_7EM__) && (__ARM_ARCH_7EM__ == 1))
-    mul[0] <<= 16;
-    mul[1] <<= 16;
+    // Place loudness in the high halfword for SMULWB/SMULWT in *locals*,
+    // not in the caller's array — modifying mul[] in place causes the
+    // value to shift again on the next call and overflow to 0.
+    int32_t mul0 = mul[0] << 16;
+    int32_t mul1 = mul[1] << 16;
     int32_t hi, lo;
     enum { bits = 16 }; // saturate to 16 bits
     enum { shift = 15 }; // shift is done automatically
-    __asm__ volatile ("smulwb %0, %1, %2" : "=r" (lo) : "r" (mul[0]), "r" (val));
-    __asm__ volatile ("smulwt %0, %1, %2" : "=r" (hi) : "r" (mul[1]), "r" (val));
+    __asm__ volatile ("smulwb %0, %1, %2" : "=r" (lo) : "r" (mul0), "r" (val));
+    __asm__ volatile ("smulwt %0, %1, %2" : "=r" (hi) : "r" (mul1), "r" (val));
     __asm__ volatile ("ssat %0, %1, %2, asr %3" : "=r" (lo) : "I" (bits), "r" (lo), "I" (shift));
     __asm__ volatile ("ssat %0, %1, %2, asr %3" : "=r" (hi) : "I" (bits), "r" (hi), "I" (shift));
     __asm__ volatile ("pkhbt %0, %1, %2, lsl #16" : "=r" (val) : "r" (lo), "r" (hi)); // pack
